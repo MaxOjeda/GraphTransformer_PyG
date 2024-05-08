@@ -3,29 +3,53 @@ import torch.nn as nn
 from torch_geometric.nn.aggr import MultiAggregation
 from typing import Optional, List
 
-from layers import GTConv, MLP
+from layers import GraphTransformerLayer, MLP
 
 class GraphTransformerNet(nn.Module):
-    def __init__(self, in_dim, edge_in_dim=None, pe_in_dim: Optional[int] = None, hidden_dim: int = 128,
+    def __init__(self, node_dim, edge_dim=None, pe_dim: Optional[int] = None, hidden_dim: int = 128,
                  batch_norm=True, layer_norm=False, gate=False, qkv_bias=False,
                  num_layers: int = 4, num_heads: int = 8, gt_aggregators: List[str] = ["sum"],
                  aggregators: List[str] = ["sum"], dropout: float = 0.0):
         super(GraphTransformerNet).__init__()
 
-        self.node_emb = nn.Linear(in_dim, hidden_dim, bias=False)
+        """
+        Graph Transformer Convolution (GTConv) module.
 
-        if edge_in_dim:
-            self.edge_emb = nn.Linear(edge_in_dim, hidden_dim, bias=False)
+        Args:
+            node_dim (int): Dimensionality of the input node features -> d_n.
+            edge_dim (int, optional): Dimensionality of the input edge features -> d_e.
+            pe_dim (int, optional): Dimensionality of the positional encodings -> d_k.
+            hidden_dim (int): Dimensionality of the hidden representations -> d.
+            num_heads (int, optional): Number of attention heads. Default is 8. 
+            dropout (float, optional): Dropout probability. Default is 0.0.
+            gate (bool, optional): Use a gate attantion mechanism.
+                                   Default is False
+            qkv_bias (bool, optional): Bias in the attention mechanism.
+                                       Default is False
+            norm (str, optional): Normalization type. Options: "bn" (BatchNorm), "ln" (LayerNorm).
+                                  Default is "bn".
+            act (str, optional): Activation function name. Default is "relu".
+            aggregators (List[str], optional): Aggregation methods for the messages aggregation.
+                                               Default is ["sum"].
+        """
+
+        # h0_i = A0 * alpha_i + a0
+        self.node_emb = nn.Linear(node_dim, hidden_dim, bias=False)
+
+        if edge_dim:
+            # e0_ij = B0 * betha_ij + b0
+            self.edge_emb = nn.Linear(edge_dim, hidden_dim, bias=False)
         
-        if pe_in_dim:
-            self.pe_emb = nn.Linear(pe_in_dim, hidden_dim, bias=False)
+        if pe_dim:
+            # lambda0 = C0 * lambda_i + c0
+            self.pe_emb = nn.Linear(pe_dim, hidden_dim, bias=False)
         
         self.layers = nn.ModuleList()
         for _ in range(num_layers):
             self.layers.append(GTConv(
                 node_in_dim=hidden_dim,
                 hidden_dim=hidden_dim,
-                edge_in_dim=hidden_dim,
+                edge_dim=hidden_dim,
                 num_heads=num_heads,
                 dropout=dropout,
                 norm="bn",
