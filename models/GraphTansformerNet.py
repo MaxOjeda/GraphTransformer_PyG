@@ -3,7 +3,8 @@ import torch.nn as nn
 from torch_geometric.nn.aggr import MultiAggregation
 from typing import Optional, List
 
-from layers import GraphTransformerLayer, MLP
+from layers.mlp import MLPReadout
+from layers.GTConv import GraphTransformerLayer
 
 class GraphTransformerNet(nn.Module):
     def __init__(self, node_dim, edge_dim=None, pe_dim: Optional[int] = None, hidden_dim: int = 128,
@@ -46,35 +47,20 @@ class GraphTransformerNet(nn.Module):
         
         self.layers = nn.ModuleList()
         for _ in range(num_layers):
-            self.layers.append(GTConv(
-                node_in_dim=hidden_dim,
+            self.layers.append(GraphTransformerLayer(
+                in_dim=hidden_dim,
                 hidden_dim=hidden_dim,
                 edge_dim=hidden_dim,
-                num_heads=num_heads,
-                dropout=dropout,
-                norm="bn",
-                gate=gate,
-                qkv_bias=qkv_bias,
+                n_heads=4,
+                dropout=dropout,                
                 aggregators=gt_aggregators,
+                batch_norm=batch_norm
             ))
 
         self.global_pool = MultiAggregation(aggregators, mode="cat")
 
         num_aggrs = len(aggregators)
-        self.mu_mlp = MLP(
-            input_dim=num_aggrs * hidden_dim,
-            output_dim = 1,
-            hidden_dim=hidden_dim,
-            num_layers=1,
-            dropout=dropout
-        )
-        self.log_var_mlp = MLP(
-            input_dim=num_aggrs * hidden_dim,
-            output_dim = 1,
-            hidden_dim=hidden_dim,
-            num_layers=1,
-            dropout=dropout
-        )
+        self.mlp_readout = MLPReadout(hidden_dim, 1)
 
         self.reset_parameters()
     
@@ -85,7 +71,7 @@ class GraphTransformerNet(nn.Module):
         if self.pe_emb is not None:
             nn.init.xavier_uniform_(self.pe_emb.weight)
 
-    def forward(self, x, edge_index, edge_attr, pe, batch):
+    def forward(self, x, edge_index, edge_attr, batch):
 
         x = self.node_emb(x)
         if self.pe_emb is not None:
@@ -97,11 +83,12 @@ class GraphTransformerNet(nn.Module):
             (x, edge_attr) = layer(x=x, edge_index=edge_index, edge_attr=edge_attr)
 
         x = self.global_pool(x, batch)
-        mu = self.mu_mlp(x)
-        log_var = self.log_var_mlp(x)
-        std = torch.exp(0.5 * log_var)
+        x = self.mlp_readout(x)
+        # mu = self.mu_mlp(x)
+        # log_var = self.log_var_mlp(x)
+        # std = torch.exp(0.5 * log_var)
 
-        if self.training:
-            eps = torch.randn_like(std)
-            return mu + std * eps, std
-        return mu, std
+        # if self.training:
+        #     eps = torch.randn_like(std)
+        #     return mu + std * eps, std
+        return x

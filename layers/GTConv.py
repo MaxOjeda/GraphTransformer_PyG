@@ -2,12 +2,13 @@ import torch
 import math
 import torch.nn as nn
 from typing import List, Optional
+import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
-
+from torch_geometric.utils import add_self_loops
 
 class MultiHeadAttentionLayer(MessagePassing):
     def __init__(self, in_dim:int, out_dim:int, n_heads:int=4):
-        super().__init__()
+        super().__init__(node_dim=0)
         self.in_dim = in_dim
         self.out_dim = out_dim
         self.n_heads = n_heads
@@ -23,10 +24,11 @@ class MultiHeadAttentionLayer(MessagePassing):
         Q = Q_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
         K = K_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
         V = V_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
-
+  
         out = self.propagate(edge_index=edge_index, Q=Q, K=K, V=V, edge_attr=edge_attr, size=None)
+        return out
 
-    def message(self, edge_index, Q_i, K_j, V_j, edge_attr=None):
+    def message(self, Q_i, K_j, V_j, edge_attr=None):
         scores = torch.matmul(Q_i, K_j.transpose(-1, -2)) / math.sqrt(self.head_dim)
         alpha = torch.softmax(scores, dim=-1)
         out_alpha = torch.matmul(alpha, V_j)
@@ -44,26 +46,21 @@ class GraphTransformerLayer(MessagePassing):
         self.n_heads = n_heads
         self.head_dim = hidden_dim // n_heads
         self.aggregators = aggregators
+        self.dropout = dropout
         self.num_aggrs = len(aggregators)
 
-        # self.WQ = nn.Linear(in_dim, hidden_dim, bias=False)
-        # self.WK = nn.Linear(in_dim, hidden_dim, bias=False)
-        # self.WV = nn.Linear(in_dim, hidden_dim, bias=False)
         self.attention = MultiHeadAttentionLayer(in_dim, hidden_dim, n_heads)
-        self.WO = nn.Linear(self.num_aggrs * hidden_dim, in_dim, bias=False)
-
+        self.WO = nn.Linear(self.num_aggrs * hidden_dim, hidden_dim, bias=False)
 
         if batch_norm is not None:
-            self.norm1 = nn.BatchNorm1d(in_dim)
-            self.norm2 = nn.BatchNorm1d(in_dim)
+            self.norm1 = nn.BatchNorm1d(hidden_dim)
+            self.norm2 = nn.BatchNorm1d(hidden_dim)
         else:
-            self.norm1 = nn.LayerNorm(in_dim)
-            self.norm2 = nn.LayerNorm(in_dim)
+            self.norm1 = nn.LayerNorm(hidden_dim)
+            self.norm2 = nn.LayerNorm(hidden_dim)
 
-
-        self.dropout_layer = nn.Dropout(p=dropout)
-
-        #self.ff = MLP()
+        self.ffn1 = nn.Linear(hidden_dim, 2 * hidden_dim, bias=False)
+        self.ffn2 = nn.Linear(2 * hidden_dim, hidden_dim, bias=False)
 
         #self.reset_parameters()
 
@@ -84,87 +81,44 @@ class GraphTransformerLayer(MessagePassing):
 
 
     def forward(self, x, edge_index, edge_attr=None):
-        x_ = x
-        edge_attr_ = edge_attr
+        x_ = x # for residual
+        print(x.shape)
+        edge_index_ = edge_index
         attn_out = self.attention(x, edge_index)
-        print(attn_out)
-        # Q_h = self.WQ(x)
-        # K_h = self.WK(x)
-        # V_h = self.WV(x)
+        print(attn_out.shape)
+        h = attn_out.view(-1, self.hidden_dim * self.num_aggrs)  # concatenation
+        print(h.shape)
+        h = F.dropout(h, self.dropout, training=self.training)
+        print(h.shape)
+        h = self.WO(h)
+        print(h.shape)
+        h = h + x_ # Residual 1
+        h = self.norm1(h)
+        
+        # FFN
+        h_ = h
+        h = self.ffn1(h)
+        h = F.relu(h)
+        h = F.dropout(h, self.dropout, training=self.training)
+        h = self.ffn2(h)
+        h = self.norm2(h + h_)
 
-        # Q = Q_h.view(-1, self.n_heads, self.hidden_dim // self.n_heads)
-        # K = K_h.view(-1, self.n_heads, self.hidden_dim // self.n_heads)
-        # V = V_h.view(-1, self.n_heads, self.hidden_dim // self.n_heads)
-        # #a = torch.matmul(Q_h, K_h.transpose(-1, -2)).squeeze(-1).squeeze(-1)
-        # scores = torch.matmul(Q, K.transpose(-1, -2)) / math.sqrt(self.head_dim)
-        # alpha = torch.softmax(scores, dim=-1)
-        # a = torch.matmul(alpha, V)
-        # print(scores)
-        # print(alpha)
-        # print(a)
-        # print(scores.shape)
-        # print(alpha.shape)
-        # print(a.shape)
-        # print(V.shape)
+        # if self.edge_in_dim is None:
+        #     out_eij = None
+        # else:
+        #     out_eij = self._eij
+        #     self._eij = None
+        #     out_eij = out_eij.view(-1, self.hidden_dim)
 
+        #     # EDGES
+        #     out_eij = self.dropout_layer(out_eij)
+        #     out_eij = self.WOe(out_eij) + edge_attr  # Residual connection
+        #     out_eij = self.norm1e(out_eij)
+        #     # FFN--edges
+        #     ffn_eij_in = out_eij
+        #     out_eij = self.ffn_e(out_eij)
+        #     out_eij = self.norm2e(ffn_eij_in + out_eij)
 
-        # print(f"x shape: {x.shape}")
-        # print(f"Qh shape: {Q_h.shape}")
-        # print(f"Q shape: {Q.shape}")
-        # print(f"Q size: {Q.size(-1)}")
-
-        # out = self.propagate(
-        #     edge_index, Q=Q, K=K, V=V, edge_attr=edge_attr, size=None
-        # )
-        out = out.view(-1, self.hidden_dim * self.num_aggrs)  # concatenation
-
-        # NODES
-        out = self.dropout_layer(out)
-        out = self.WO(out) + x_
-        out = self.norm1(out)
-        # FFN--nodes
-        ffn_in = out
-        out = self.ffn(out)
-        out = self.norm2(ffn_in + out)
-
-        if self.edge_in_dim is None:
-            out_eij = None
-        else:
-            out_eij = self._eij
-            self._eij = None
-            out_eij = out_eij.view(-1, self.hidden_dim)
-
-            # EDGES
-            out_eij = self.dropout_layer(out_eij)
-            out_eij = self.WOe(out_eij) + edge_attr_  # Residual connection
-            out_eij = self.norm1e(out_eij)
-            # FFN--edges
-            ffn_eij_in = out_eij
-            out_eij = self.ffn_e(out_eij)
-            out_eij = self.norm2e(ffn_eij_in + out_eij)
-
-        return (out, out_eij)
+        return h
     
-    def message(self, Q_i, K_j, V_j, G_j, index, edge_attr=None):
-        d_k = Q_i.size(-1)
-        qijk = (Q_i * K_j) / math.sqrt(d_k)
-        if self.edge_in_dim is not None:
-            assert edge_attr is not None
-            E = self.WE(edge_attr).view(-1, self.num_heads, self.hidden_dim // self.num_heads)
-            qijk = E * qijk
-            self._eij = qijk
-        else:
-            self._eij = None
-
-
-        qijk = (Q_i * K_j).sum(dim=-1) / math.sqrt(d_k)
-
-        alpha = torch.softmax(qijk, index)  # Log-Sum-Exp trick used. No need for clipping (-5,5)
-
-        if self.gate:
-            V_j_g = torch.mul(V_j, torch.sigmoid(G_j))
-        else:
-            V_j_g = V_j
-
-        return alpha.view(-1, self.num_heads, 1) * V_j_g
 
