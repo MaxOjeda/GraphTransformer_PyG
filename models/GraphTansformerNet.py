@@ -11,7 +11,7 @@ class GraphTransformerNet(nn.Module):
                  batch_norm=True, layer_norm=False, gate=False, qkv_bias=False,
                  num_layers: int = 4, num_heads: int = 8, gt_aggregators: List[str] = ["sum"],
                  aggregators: List[str] = ["sum"], dropout: float = 0.0):
-        super(GraphTransformerNet).__init__()
+        super().__init__()
 
         """
         Graph Transformer Convolution (GTConv) module.
@@ -33,6 +33,9 @@ class GraphTransformerNet(nn.Module):
             aggregators (List[str], optional): Aggregation methods for the messages aggregation.
                                                Default is ["sum"].
         """
+        self.node_dim = node_dim
+        self.edge_dim = edge_dim
+        self.pe_dim = pe_dim
 
         # h0_i = A0 * alpha_i + a0
         self.node_emb = nn.Linear(node_dim, hidden_dim, bias=False)
@@ -51,7 +54,7 @@ class GraphTransformerNet(nn.Module):
                 in_dim=hidden_dim,
                 hidden_dim=hidden_dim,
                 edge_dim=hidden_dim,
-                n_heads=4,
+                n_heads=num_heads,
                 dropout=dropout,                
                 aggregators=gt_aggregators,
                 batch_norm=batch_norm
@@ -66,21 +69,22 @@ class GraphTransformerNet(nn.Module):
     
     def reset_parameters(self):
         nn.init.xavier_uniform_(self.node_emb.weight)
-        if self.edge_emb is not None:
+        if self.edge_dim is not None:
             nn.init.xavier_uniform_(self.edge_emb.weight)
-        if self.pe_emb is not None:
+        if self.pe_dim is not None:
             nn.init.xavier_uniform_(self.pe_emb.weight)
 
     def forward(self, x, edge_index, edge_attr, batch):
 
         x = self.node_emb(x)
-        if self.pe_emb is not None:
+        if self.pe_dim is not None:
             x = x + self.pe_emb(x)
-        if self.edge_emb:
+        if self.edge_dim is not None:
             edge_attr = self.edge_emb(edge_attr)
         
         for layer in self.layers:
-            (x, edge_attr) = layer(x=x, edge_index=edge_index, edge_attr=edge_attr)
+            #(x, edge_attr) = layer(x=x, edge_index=edge_index, edge_attr=edge_attr)
+            x = layer(x=x, edge_index=edge_index)
 
         x = self.global_pool(x, batch)
         x = self.mlp_readout(x)

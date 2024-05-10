@@ -82,16 +82,11 @@ class GraphTransformerLayer(MessagePassing):
 
     def forward(self, x, edge_index, edge_attr=None):
         x_ = x # for residual
-        print(x.shape)
         edge_index_ = edge_index
         attn_out = self.attention(x, edge_index)
-        print(attn_out.shape)
         h = attn_out.view(-1, self.hidden_dim * self.num_aggrs)  # concatenation
-        print(h.shape)
         h = F.dropout(h, self.dropout, training=self.training)
-        print(h.shape)
         h = self.WO(h)
-        print(h.shape)
         h = h + x_ # Residual 1
         h = self.norm1(h)
         
