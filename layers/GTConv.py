@@ -25,10 +25,10 @@ class MultiHeadAttentionLayer(MessagePassing):
         K = K_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
         V = V_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
   
-        out = self.propagate(edge_index=edge_index, Q=Q, K=K, V=V, edge_attr=edge_attr, size=None)
+        out = self.propagate(edge_index=edge_index, Q=Q, K=K, V=V, size=None)
         return out
 
-    def message(self, Q_i, K_j, V_j, edge_attr=None):
+    def message(self, Q_i, K_j, V_j):
         scores = torch.matmul(Q_i, K_j.transpose(-1, -2)) / math.sqrt(self.head_dim)
         alpha = torch.softmax(scores, dim=-1)
         out_alpha = torch.matmul(alpha, V_j)
