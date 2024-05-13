@@ -14,6 +14,7 @@ class MultiHeadAttentionLayer(MessagePassing):
         self.edge_dim = edge_dim
         self.n_heads = n_heads
         self.head_dim = out_dim // n_heads
+        self.eij = None
 
         self.WQ = nn.Linear(in_dim, out_dim, bias=False)
         self.WK = nn.Linear(in_dim, out_dim, bias=False)
@@ -28,47 +29,32 @@ class MultiHeadAttentionLayer(MessagePassing):
         Q = Q_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
         K = K_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
         V = V_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
-        print(f"x: {x.shape}")
-        #print(f"edge: {edge_attr.shape}")
         if self.edge_dim is not None:
             E_h = self.WE(edge_attr)
             E = E_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
         else:
             E = None
-        temp = torch.matmul(Q, K.transpose(-1, -2))
-        # print(f"Q shape: {Q.shape}")
-        # print(f"K shape: {K.shape}")
-        # print(f"K transpose shape: {K.transpose(-1, -2).shape}")
-        # print(f"scores shape: {temp.shape}")
-        # print(f"E shape: {E.shape}")
-        # print(f"E T shape: {E.transpose(-1, -2).shape}")
         h = self.propagate(edge_index=edge_index, Q=Q, K=K, V=V, E=E, size=None)
-        #h = self.propagate(edge_index=edge_index, Q=Q, K=K, V=V, edge_attr=edge_attr, size=None)
-        return h
+        return h, self.eij
 
     def message(self, Q_i, K_j, V_j, E):
-        print(f"Q_i: {Q_i.shape}")
-        print(f"K_j: {K_j.shape}")
-        print(f"V_j: {V_j.shape}")
-        #scores = torch.matmul(Q_i, K_j.transpose(-1, -2)) / math.sqrt(self.head_dim)
+        #print(f"Q_i: {Q_i.shape}")
+        #print(f"K_j: {K_j.shape}")
+        #print(f"V_j: {V_j.shape}")
         scores = (K_j * Q_i) / math.sqrt(self.head_dim)
-        print(f"scores: {scores.shape}")
+        #print(f"scores: {scores.shape}")
         if E is not None:
-            print(f"E shape: {E.shape}")
-            #scores = torch.matmul(scores, E)
+            #print(f"E shape: {E.shape}")
             scores = scores * E
-
-            print(f"Scores Edges: {scores.shape}")
-            self._eij = scores 
+            #print(f"Scores Edges: {scores.shape}")
+            self.eij = scores 
         else:
-            self._eij = None
+            self.eij = None
         alpha = torch.exp((scores.sum(-1, keepdim=True)).clamp(-5,5))
-        print(f"Alpha: {alpha.shape}")
-        # if E is not None:
-        #     V_j = V_j.transpose(-1, -2)        
-        #h = torch.matmul(alpha, V_j)
+        #print(f"Alpha: {alpha.shape}")
+
         h = alpha * V_j
-        print(f"H: {h.shape}")
+        #print(f"H: {h.shape}")
         return h
 
 
@@ -132,8 +118,8 @@ class GraphTransformerLayer(MessagePassing):
     def forward(self, x, edge_index, edge_attr=None):
         x_ = x # for residual
         edge_attr_ = edge_attr
-        attn = self.attention(x, edge_index, edge_attr)
-        h = attn.view(-1, self.hidden_dim * self.num_aggrs)  # concatenation
+        attn_h, eij = self.attention(x, edge_index, edge_attr)
+        h = attn_h.view(-1, self.hidden_dim * self.num_aggrs)  # concatenation
         h = F.dropout(h, self.dropout, training=self.training)
         h = self.WO(h)
         h = h + x_ # Residual 1
@@ -149,7 +135,7 @@ class GraphTransformerLayer(MessagePassing):
         if self.edge_dim is None:
             e_ij = None
         else:
-            e_ij = self._eij.view(-1, self.hidden_dim)
+            e_ij = eij.view(-1, self.hidden_dim)
             e_ij = F.dropout(e_ij, self.dropout, training=self.training)
             e_ij = self.WOe(e_ij) + edge_attr_  # Residual connection
             e_ij = self.norm1e(e_ij)

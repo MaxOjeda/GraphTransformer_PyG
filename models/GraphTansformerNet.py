@@ -8,7 +8,7 @@ from layers.GTConv import GraphTransformerLayer
 
 class GraphTransformerNet(nn.Module):
     def __init__(self, node_dim, edge_dim=None, pe_dim: Optional[int] = None, hidden_dim: int = 128,
-                 batch_norm=True, layer_norm=False, gate=False, qkv_bias=False,
+                 batch_norm=True, layer_norm=False, qkv_bias=False,
                  num_layers: int = 4, num_heads: int = 8, gt_aggregators: List[str] = ["sum"],
                  aggregators: List[str] = ["sum"], dropout: float = 0.0):
         super().__init__()
@@ -83,19 +83,12 @@ class GraphTransformerNet(nn.Module):
             # print(edge_attr.shape)
             edge_attr = self.edge_emb(edge_attr)
         # print(f"X: {x.shape}")
-        print(f"edge: {edge_attr.shape}")
+        #print(f"edge: {edge_attr.shape}")
 
         for layer in self.layers:
-            #(x, edge_attr) = layer(x=x, edge_index=edge_index, edge_attr=edge_attr)
             (x, edge_attr) = layer(x=x, edge_index=edge_index, edge_attr=edge_attr)
 
         x = self.global_pool(x, batch)
         x = self.mlp_readout(x)
-        # mu = self.mu_mlp(x)
-        # log_var = self.log_var_mlp(x)
-        # std = torch.exp(0.5 * log_var)
 
-        # if self.training:
-        #     eps = torch.randn_like(std)
-        #     return mu + std * eps, std
         return x
