@@ -100,19 +100,20 @@ class GraphTransformerLayer(MessagePassing):
         #self.reset_parameters()
 
 
-    # def reset_parameters(self):
-    #     """
-    #     Note: The output of the Q-K-V layers does not pass through the activation layer (as opposed to the input),
-    #             so the variance estimation should differ by a factor of two from the default
-    #             kaiming_uniform initialization.
-    #     """
-    #     nn.init.xavier_uniform_(self.WQ.weight)
-    #     nn.init.xavier_uniform_(self.WK.weight)
-    #     nn.init.xavier_uniform_(self.WV.weight)
-    #     nn.init.xavier_uniform_(self.WO.weight)
-    #     if self.edge_dim is not None:
-    #         nn.init.xavier_uniform_(self.WE.weight)
-    #         nn.init.xavier_uniform_(self.WOe.weight)
+    def reset_parameters(self):
+        # Inicialización de parámetros para las capas lineales
+        nn.init.xavier_uniform_(self.attention.WQ.weight)
+        nn.init.xavier_uniform_(self.attention.WK.weight)
+        nn.init.xavier_uniform_(self.attention.WV.weight)
+        nn.init.xavier_uniform_(self.WO.weight)
+        if self.edge_dim is not None:
+            nn.init.xavier_uniform_(self.attention.WE.weight)
+            nn.init.xavier_uniform_(self.WOe.weight)
+        nn.init.xavier_uniform_(self.ffn1.weight)
+        nn.init.xavier_uniform_(self.ffn2.weight)
+        if self.edge_dim is not None:
+            nn.init.xavier_uniform_(self.ffn1e.weight)
+            nn.init.xavier_uniform_(self.ffn2e.weight)
 
 
     def forward(self, x, edge_index, edge_attr=None):

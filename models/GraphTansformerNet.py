@@ -39,7 +39,6 @@ class GraphTransformerNet(nn.Module):
 
         # h0_i = A0 * alpha_i + a0
         self.node_emb = nn.Linear(node_dim, hidden_dim, bias=False)
-
         if edge_dim:
             # e0_ij = B0 * betha_ij + b0
             self.edge_emb = nn.Linear(edge_dim, hidden_dim, bias=False)
@@ -79,6 +78,8 @@ class GraphTransformerNet(nn.Module):
         x = self.node_emb(x)
         if self.pe_dim is not None:
             x = x + self.pe_emb(x)
+        print(self.edge_dim)
+
         if self.edge_dim is not None:
             # print(edge_attr.shape)
             edge_attr = self.edge_emb(edge_attr)
