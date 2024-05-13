@@ -74,14 +74,14 @@ class GraphTransformerLayer(MessagePassing):
             self.ffn1e = nn.Linear(hidden_dim, 2 * hidden_dim, bias=False)
             self.ffn2e = nn.Linear(2 * hidden_dim, hidden_dim, bias=False)
 
-            if batch_norm is not None:
+            if batch_norm == False:
                 self.norm1e = nn.BatchNorm1d(hidden_dim)
                 self.norm2e = nn.BatchNorm1d(hidden_dim)
             else:
                 self.norm1e = nn.LayerNorm(hidden_dim)
                 self.norm2e = nn.LayerNorm(hidden_dim)
 
-        if batch_norm is not None:
+        if batch_norm == False:
             self.norm1 = nn.BatchNorm1d(hidden_dim)
             self.norm2 = nn.BatchNorm1d(hidden_dim)
         else:
@@ -91,7 +91,8 @@ class GraphTransformerLayer(MessagePassing):
         self.ffn1 = nn.Linear(hidden_dim, 2 * hidden_dim, bias=False)
         self.ffn2 = nn.Linear(2 * hidden_dim, hidden_dim, bias=False)
 
-        #self.reset_parameters()
+
+        self.reset_parameters()
 
 
     def reset_parameters(self):
