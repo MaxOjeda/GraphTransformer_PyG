@@ -78,7 +78,6 @@ class GraphTransformerNet(nn.Module):
         x = self.node_emb(x)
         if self.pe_dim is not None:
             x = x + self.pe_emb(x)
-        print(self.edge_dim)
 
         if self.edge_dim is not None:
             # print(edge_attr.shape)

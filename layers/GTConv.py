@@ -38,15 +38,9 @@ class MultiHeadAttentionLayer(MessagePassing):
         return h, self.eij
 
     def message(self, Q_i, K_j, V_j, E):
-        #print(f"Q_i: {Q_i.shape}")
-        #print(f"K_j: {K_j.shape}")
-        #print(f"V_j: {V_j.shape}")
         scores = (K_j * Q_i) / math.sqrt(self.head_dim)
-        #print(f"scores: {scores.shape}")
         if E is not None:
-            #print(f"E shape: {E.shape}")
             scores = scores * E
-            #print(f"Scores Edges: {scores.shape}")
             self.eij = scores 
         else:
             self.eij = None
