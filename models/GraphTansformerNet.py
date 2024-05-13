@@ -53,7 +53,7 @@ class GraphTransformerNet(nn.Module):
             self.layers.append(GraphTransformerLayer(
                 in_dim=hidden_dim,
                 hidden_dim=hidden_dim,
-                edge_dim=hidden_dim,
+                edge_dim=self.edge_dim,
                 n_heads=num_heads,
                 dropout=dropout,                
                 aggregators=gt_aggregators,
@@ -80,11 +80,14 @@ class GraphTransformerNet(nn.Module):
         if self.pe_dim is not None:
             x = x + self.pe_emb(x)
         if self.edge_dim is not None:
+            # print(edge_attr.shape)
             edge_attr = self.edge_emb(edge_attr)
-        
+        # print(f"X: {x.shape}")
+        print(f"edge: {edge_attr.shape}")
+
         for layer in self.layers:
             #(x, edge_attr) = layer(x=x, edge_index=edge_index, edge_attr=edge_attr)
-            x = layer(x=x, edge_index=edge_index)
+            (x, edge_attr) = layer(x=x, edge_index=edge_index, edge_attr=edge_attr)
 
         x = self.global_pool(x, batch)
         x = self.mlp_readout(x)

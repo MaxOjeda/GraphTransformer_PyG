@@ -37,9 +37,10 @@ edge_index = torch.tensor([[0,1],
 edge_attr = torch.randn(num_edges, num_edge_features)
 
 gt = GraphTransformerLayer(in_dim=num_node_features, 
-            #edge_dim=num_edge_features,
+            edge_dim=num_edge_features,
             hidden_dim=16, 
-            n_heads=2)
+            n_heads=2,
+            use_edges=True)
 
 data = Data(x=x, edge_index=edge_index.t().contiguous(), edge_attr=edge_attr)
 out = gt(x=data.x, edge_index=data.edge_index, edge_attr=data.edge_attr)

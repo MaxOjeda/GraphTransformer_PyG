@@ -13,8 +13,9 @@ def train(epoch, loss_func):
     for data in tqdm(train_loader, desc="Training Loader"):
         data = data.to(device)
         optimizer.zero_grad()
-        
-        out = model(x=data.x.float(), edge_index=data.edge_index, edge_attr=None, batch=data.batch)
+        # print(data.x.shape)
+        # print(data.edge_attr.unsqueeze(1).shape)
+        out = model(x=data.x.float(), edge_index=data.edge_index, edge_attr=data.edge_attr.float().unsqueeze(1), batch=data.batch)
         loss = loss_func(out.squeeze(), data.y)
         loss.backward()
         optimizer.step()
@@ -28,7 +29,7 @@ def test(loader):
     for data in tqdm(loader, desc="Test Loader"):
         data = data.to(device)
        
-        out = model(x=data.x.float(), edge_index=data.edge_index, edge_attr=None, batch=data.batch)
+        out = model(x=data.x.float(), edge_index=data.edge_index, edge_attr=data.edge_attr.float().unsqueeze(1), batch=data.batch)
         loss = criterion(out.squeeze(), data.y)
         test_mae = mean_absolute_error(data.y.detach().numpy(), out.squeeze().detach().numpy())
     return loss, test_mae
@@ -41,12 +42,14 @@ if __name__ == '__main__':
     dataset_val = ZINC(root=f'data/ZINC', split="val")
     dataset_test = ZINC(root=f'data/ZINC', split="test")
 
+    print(dataset_train[0].num_edge_features)
 
     epochs = 2
     batch_size = 32
-
+    print(dataset_train.num_edge_features)
     model = GraphTransformerNet(node_dim=dataset_train.num_features,
-                                hidden_dim=32,
+                                edge_dim=dataset_train.num_edge_features,
+                                hidden_dim=128,
                                 num_layers=4,
                                 num_heads=8)
     print(model)
