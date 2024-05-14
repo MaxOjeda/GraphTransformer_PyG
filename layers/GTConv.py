@@ -1,5 +1,5 @@
 import torch
-import math
+import numpy as np
 import torch.nn as nn
 from typing import List, Optional
 import torch.nn.functional as F
@@ -17,29 +17,29 @@ class MultiHeadAttentionLayer(MessagePassing):
         self.head_dim = out_dim // n_heads
         self.eij = None
 
-        self.WQ = nn.Linear(in_dim, out_dim, bias=False)
-        self.WK = nn.Linear(in_dim, out_dim, bias=False)
-        self.WV = nn.Linear(in_dim, out_dim, bias=False)
+        self.WQ = nn.Linear(in_dim, out_dim * n_heads, bias=False)
+        self.WK = nn.Linear(in_dim, out_dim * n_heads, bias=False)
+        self.WV = nn.Linear(in_dim, out_dim * n_heads, bias=False)
         if edge_dim is not None:
-            self.WE = nn.Linear(in_dim, out_dim, bias=False)
+            self.WE = nn.Linear(in_dim, out_dim * n_heads, bias=False)
 
 
     def forward(self, x, edge_index, edge_attr=None):
         Q_h, K_h, V_h = self.WQ(x), self.WK(x), self.WV(x)
 
-        Q = Q_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
-        K = K_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
-        V = V_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
+        Q = Q_h.view(-1, self.n_heads, self.out_dim)
+        K = K_h.view(-1, self.n_heads, self.out_dim)
+        V = V_h.view(-1, self.n_heads, self.out_dim)
         if self.edge_dim is not None:
             E_h = self.WE(edge_attr)
-            E = E_h.view(-1, self.n_heads, self.out_dim // self.n_heads)
+            E = E_h.view(-1, self.n_heads, self.out_dim)
         else:
             E = None
         h = self.propagate(edge_index=edge_index, Q=Q, K=K, V=V, E=E, size=None)
         return h, self.eij
 
     def message(self, Q_i, K_j, V_j, E):
-        scores = (Q_i * K_j) / math.sqrt(self.head_dim)
+        scores = (K_j * Q_i) / np.sqrt(self.out_dim)
         if E is not None:
             scores = scores * E
             self.eij = scores 
@@ -47,7 +47,7 @@ class MultiHeadAttentionLayer(MessagePassing):
             self.eij = None
         #alpha = torch.exp((scores.sum(-1, keepdim=True)).clamp(-5,5))
         #alpha = softmax(scores, dim=-1)
-        alpha = F.softmax(scores, dim=-1)
+        alpha = scores.softmax(dim=-1)
         #print(f"Alpha: {alpha.shape}")
 
         h = alpha * V_j
@@ -69,30 +69,30 @@ class GraphTransformerLayer(MessagePassing):
         self.num_aggrs = len(aggregators)
         self.use_edges = use_edges
 
-        self.attention = MultiHeadAttentionLayer(in_dim=in_dim, out_dim=hidden_dim, edge_dim=self.edge_dim, n_heads=n_heads, use_edges=self.use_edges)
-        self.WO = nn.Linear(self.num_aggrs * hidden_dim, hidden_dim, bias=False)
+        self.attention = MultiHeadAttentionLayer(in_dim=in_dim, out_dim=hidden_dim // n_heads, edge_dim=self.edge_dim, n_heads=n_heads, use_edges=self.use_edges)
+        self.WO = nn.Linear(self.num_aggrs * hidden_dim, hidden_dim)
         if edge_dim is not None:
-            self.WOe = nn.Linear(hidden_dim, hidden_dim, bias=True)
+            self.WOe = nn.Linear(hidden_dim, hidden_dim)
 
-            self.ffn1e = nn.Linear(hidden_dim, 2 * hidden_dim, bias=False)
-            self.ffn2e = nn.Linear(2 * hidden_dim, hidden_dim, bias=False)
+            self.ffn1e = nn.Linear(hidden_dim, 2 * hidden_dim)
+            self.ffn2e = nn.Linear(2 * hidden_dim, hidden_dim)
 
-            if batch_norm == False:
+            if batch_norm:
                 self.norm1e = nn.BatchNorm1d(hidden_dim)
                 self.norm2e = nn.BatchNorm1d(hidden_dim)
             else:
                 self.norm1e = nn.LayerNorm(hidden_dim)
                 self.norm2e = nn.LayerNorm(hidden_dim)
 
-        if batch_norm == False:
+        if batch_norm:
             self.norm1 = nn.BatchNorm1d(hidden_dim)
             self.norm2 = nn.BatchNorm1d(hidden_dim)
         else:
             self.norm1 = nn.LayerNorm(hidden_dim)
             self.norm2 = nn.LayerNorm(hidden_dim)
 
-        self.ffn1 = nn.Linear(hidden_dim, 2 * hidden_dim, bias=False)
-        self.ffn2 = nn.Linear(2 * hidden_dim, hidden_dim, bias=False)
+        self.ffn1 = nn.Linear(hidden_dim, 2 * hidden_dim)
+        self.ffn2 = nn.Linear(2 * hidden_dim, hidden_dim)
 
 
         self.reset_parameters()
@@ -115,28 +115,29 @@ class GraphTransformerLayer(MessagePassing):
 
 
     def forward(self, x, edge_index, edge_attr=None):
-        x_ = x # for residual
-        edge_attr_ = edge_attr
-        attn_h, eij = self.attention(x, edge_index, edge_attr)
+        h_in1 = x # for residual
+        e_in1 = edge_attr
+        attn_h, attn_e = self.attention(x, edge_index, edge_attr)
         h = attn_h.view(-1, self.hidden_dim * self.num_aggrs)  # concatenation
         h = F.dropout(h, self.dropout, training=self.training)
         h = self.WO(h)
-        h = h + x_ # Residual 1
+        h = h + h_in1 # Residual 1
         h = self.norm1(h)
         
         # FFN
-        h_ = h
+        h_in2 = h
         h = self.ffn1(h)
         h = F.relu(h)
         h = F.dropout(h, self.dropout, training=self.training)
         h = self.ffn2(h)
-        h = self.norm2(h + h_)
+        h = h + h_in2
+        h = self.norm2(h)
         if self.edge_dim is None:
             e_ij = None
         else:
-            e_ij = eij.view(-1, self.hidden_dim)
+            e_ij = attn_e.view(-1, self.hidden_dim)
             e_ij = F.dropout(e_ij, self.dropout, training=self.training)
-            e_ij = self.WOe(e_ij) + edge_attr_  # Residual connection
+            e_ij = self.WOe(e_ij) + e_in1  # Residual connection
             e_ij = self.norm1e(e_ij)
 
             # FFN--edges
