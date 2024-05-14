@@ -5,6 +5,7 @@ from typing import List, Optional
 import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
 from torch_geometric.utils import add_self_loops, softmax
+import torch.nn.functional as F
 
 class MultiHeadAttentionLayer(MessagePassing):
     def __init__(self, in_dim:int, out_dim:int, edge_dim=None, n_heads:int=4, use_edges=False):
@@ -44,8 +45,9 @@ class MultiHeadAttentionLayer(MessagePassing):
             self.eij = scores 
         else:
             self.eij = None
-        alpha = torch.exp((scores.sum(-1, keepdim=True)).clamp(-5,5))
+        #alpha = torch.exp((scores.sum(-1, keepdim=True)).clamp(-5,5))
         #alpha = softmax(scores, dim=-1)
+        alpha = F.softmax(scores, dim=-1)
         #print(f"Alpha: {alpha.shape}")
 
         h = alpha * V_j
