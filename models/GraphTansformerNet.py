@@ -1,5 +1,7 @@
 import torch
 import torch.nn as nn
+from torch import Tensor
+from torch_geometric.data import Batch
 from torch_geometric.nn.aggr import MultiAggregation
 from typing import Optional, List
 
@@ -73,12 +75,12 @@ class GraphTransformerNet(nn.Module):
         if self.pe_dim is not None:
             nn.init.xavier_uniform_(self.pe_emb.weight)
 
-    def forward(self, x, edge_index, edge_attr, batch):
+    def forward(self, x: Tensor, edge_index: Tensor, edge_attr: Tensor, pe: Tensor, batch: Batch):
 
         x = self.node_emb(x)
         x = self.in_feat_dropout(x)
         if self.pe_dim is not None:
-            x = x + self.pe_emb(x)
+            x = x + self.pe_emb(pe)
 
         if self.edge_dim is not None:
             # print(edge_attr.shape)
