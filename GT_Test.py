@@ -45,11 +45,11 @@ if __name__ == '__main__':
     print(dataset_train[0].num_edge_features)
 
     epochs = 2
-    batch_size = 32
+    batch_size = 64
     print(dataset_train.num_edge_features)
     model = GraphTransformerNet(node_dim=dataset_train.num_features,
                                 edge_dim=dataset_train.num_edge_features,
-                                hidden_dim=128,
+                                hidden_dim=32,
                                 num_layers=4,
                                 num_heads=8)
     print(model)

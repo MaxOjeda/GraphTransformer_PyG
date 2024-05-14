@@ -38,13 +38,14 @@ class MultiHeadAttentionLayer(MessagePassing):
         return h, self.eij
 
     def message(self, Q_i, K_j, V_j, E):
-        scores = (K_j * Q_i) / math.sqrt(self.head_dim)
+        scores = (Q_i * K_j) / math.sqrt(self.head_dim)
         if E is not None:
             scores = scores * E
             self.eij = scores 
         else:
             self.eij = None
         alpha = torch.exp((scores.sum(-1, keepdim=True)).clamp(-5,5))
+        #alpha = softmax(scores, dim=-1)
         #print(f"Alpha: {alpha.shape}")
 
         h = alpha * V_j
