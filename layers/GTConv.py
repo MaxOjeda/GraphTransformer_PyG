@@ -4,8 +4,7 @@ import torch.nn as nn
 from typing import List, Optional
 import torch.nn.functional as F
 from torch_geometric.nn import MessagePassing
-from torch_geometric.utils import add_self_loops, softmax
-import torch.nn.functional as F
+from torch_geometric.utils import add_self_loops
 
 class MultiHeadAttentionLayer(MessagePassing):
     def __init__(self, in_dim:int, out_dim:int, edge_dim=None, n_heads:int=4, use_edges=False):

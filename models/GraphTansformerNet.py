@@ -10,7 +10,7 @@ from layers.GTConv import GraphTransformerLayer
 
 class GraphTransformerNet(nn.Module):
     def __init__(self, node_dim, edge_dim=None, pe_dim: Optional[int] = None, hidden_dim: int = 128,
-                 batch_norm=True,
+                 out_dim: int = 1, batch_norm=True,
                  num_layers: int = 4, num_heads: int = 8, gt_aggregators: List[str] = ["sum"],
                  aggregators: List[str] = ["sum"], in_feat_dropout: float=0.0, dropout: float = 0.0):
         super().__init__()
@@ -37,6 +37,7 @@ class GraphTransformerNet(nn.Module):
         """
         self.node_dim = node_dim
         self.edge_dim = edge_dim
+        self.out_dim = out_dim
         self.pe_dim = pe_dim
 
         # h0_i = A0 * alpha_i + a0
@@ -64,7 +65,7 @@ class GraphTransformerNet(nn.Module):
         self.global_pool = MultiAggregation(aggregators, mode="cat")
         self.in_feat_dropout = nn.Dropout(in_feat_dropout)
         num_aggrs = len(aggregators)
-        self.mlp_readout = MLPReadout(hidden_dim, 1)
+        self.mlp_readout = MLPReadout(hidden_dim, self.out_dim)
 
         self.reset_parameters()
     
@@ -85,8 +86,6 @@ class GraphTransformerNet(nn.Module):
         if self.edge_dim is not None:
             # print(edge_attr.shape)
             edge_attr = self.edge_emb(edge_attr)
-        # print(f"X: {x.shape}")
-        #print(f"edge: {edge_attr.shape}")
 
         for layer in self.layers:
             (x, edge_attr) = layer(x=x, edge_index=edge_index, edge_attr=edge_attr)
