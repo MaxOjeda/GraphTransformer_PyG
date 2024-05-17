@@ -12,7 +12,8 @@ class GraphTransformerNet(nn.Module):
     def __init__(self, node_dim, edge_dim=None, pe_dim: Optional[int] = None, hidden_dim: int = 128,
                  out_dim: int = 1, batch_norm=True,
                  num_layers: int = 4, num_heads: int = 8, gt_aggregators: List[str] = ["sum"],
-                 aggregators: List[str] = ["sum"], in_feat_dropout: float=0.0, dropout: float = 0.0):
+                 aggregators: List[str] = ["sum"], in_feat_dropout: float=0.0, dropout: float = 0.0,
+                 graph_classification: bool = True):
         super().__init__()
 
         """
@@ -39,6 +40,7 @@ class GraphTransformerNet(nn.Module):
         self.edge_dim = edge_dim
         self.out_dim = out_dim
         self.pe_dim = pe_dim
+        self.graph_classification = graph_classification
 
         # h0_i = A0 * alpha_i + a0
         self.node_emb = nn.Linear(node_dim, hidden_dim, bias=False)
@@ -90,7 +92,8 @@ class GraphTransformerNet(nn.Module):
         for layer in self.layers:
             (x, edge_attr) = layer(x=x, edge_index=edge_index, edge_attr=edge_attr)
 
-        x = self.global_pool(x, batch)
+        if self.graph_classification:
+            x = self.global_pool(x, batch)
         x = self.mlp_readout(x)
 
         return x
